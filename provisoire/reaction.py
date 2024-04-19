@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
 
 class Reaction:
-
     def __init__(self, species, coeffs, rate_law):
 
         self.species = dict(zip(species, coeffs))
@@ -30,49 +29,27 @@ class Batch():
                 f"Réactions: {reactions_str}\n" + \
                 f"Concentrations initiales: {self.initial_concs}"
     
-    def evolution(self, time):
+    def evolution(self, time, plot = True):
         def ODE(t, y):
-            y = dict(zip(self.initial_concs.keys(), y))
+            y_dict = dict(zip(self.initial_concs.keys(), y))
 
             reactions_rates = np.zeros(len(self.reactions))
             transformations_rates = np.zeros(len(y))
-            transformations_rates_index = 0
-            reactions_rates_index = 0
+            
+            for i, reaction in enumerate(self.reactions):
+                concs = [y_dict.get(specie, 0) for specie in reaction.species]
+                reactions_rates[i] = reaction.reaction_rate(concs)
 
-            for reaction in self.reactions:
-                concs = np.zeros(len(reaction.species))
-                concs_index = 0
-
-                for specie in reaction.species:
-                    if specie in y:
-                        concs[concs_index] = y[specie]
-                        concs_index += 1
-
-                reactions_rates[reactions_rates_index] = reaction.reaction_rate(concs)
-                reactions_rates_index += 1
-
-            for specie in y:
-                reactions_rates_index = 0
-
-                for reaction in self.reactions:
+            for i, specie in enumerate(y_dict):
+                for j, reaction in enumerate(self.reactions):
                     if specie in reaction.species:
-                        transformations_rates[transformations_rates_index] += reactions_rates[reactions_rates_index]*reaction.species[specie]
-                    reactions_rates_index += 1
-                transformations_rates_index += 1
+                        transformations_rates[i] += reactions_rates[j] * reaction.species[specie]
 
             return transformations_rates
+        
+        results = solve_ivp(ODE, [0, time], list(self.initial_concs.values()), t_eval=np.linspace(0, time, 1000))
 
-        results = solve_ivp(ODE, [0, time], list(self.initial_concs.values()), t_eval=np.linspace(0, time, 100))
-
-        return results
-    
-reaction1 = Reaction(['A', 'B', 'C'], [-1, -1, 1], '0.2*A**2*B')
-reaction2 = Reaction(['B', 'C', 'D'], [-1, -1, 1], '0.75*B*C')
-
-initial_concs = {'A': 1, 'B': 2, 'C': 0, 'D': 0}
-
-batch = Batch(1, [reaction1, reaction2], initial_concs)
-
-results = batch.evolution(10)
-plt.plot(results.t, results.y.T)
-plt.show()
+        if plot:
+            plt.plot(results.t, results.y.T, linewidth = 1.0)
+            plt.legend(list(self.initial_concs.keys()))
+            plt.show()
